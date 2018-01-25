@@ -22,7 +22,7 @@ define(
 );
 
 function ccgn_registration_user_get_application_type ( $user_id ) {
-    return get_user_meta( $user_id, CCGN_APPLICATION_TYPE )[0];
+    return get_user_meta( $user_id, CCGN_APPLICATION_TYPE, true );
 }
 
 function ccgn_registration_user_set_application_type ( $user_id, $type ) {
@@ -53,7 +53,6 @@ function ccgn_user_is_institutional_applicant ( $user_id ) {
         == CCGN_APPLICATION_INSTITUTIONAL;
 }
 
-
 function ccgn_applicant_type_desc ( $user_id ) {
     $type = 'Unknown';
     if ( ccgn_user_is_individual_applicant( $user_id ) ) {
@@ -79,8 +78,11 @@ define( 'CCGN_APPLICATION_STATE_DETAILS', 'details-form' );
 define( 'CCGN_APPLICATION_STATE_VOUCHERS', 'vouchers-form' );
 // The user has filled out all the forms and is waiting for pre-approval
 define( 'CCGN_APPLICATION_STATE_RECEIVED', 'received' );
-// The user has been pre-approved and is waiting for vouchers
+// The user has been pre-approved and is waiting for vouchers/votes
 define( 'CCGN_APPLICATION_STATE_VOUCHING', 'vouching' );
+// The institutional user has been vouched/voted and received final approval
+// and is waiting for final approval from the legal team
+define( 'CCGN_APPLICATION_STATE_LEGAL', 'legal' );
 // The user's application has been rejected in pre- or final approval
 define( 'CCGN_APPLICATION_STATE_REJECTED', 'rejected' );
 // The user's application has been accepted in final approval
@@ -95,8 +97,27 @@ define(
     ]
 );
 
+define(
+    'CCGN_APPLICATION_STATE_LEGAL_APPROVAL_STATE_AVAILABLE',
+    [
+        CCGN_APPLICATION_STATE_LEGAL,
+        CCGN_APPLICATION_STATE_REJECTED,
+        CCGN_APPLICATION_STATE_ACCEPTED
+    ]
+);
+
+define(
+    'CCGN_APPLICATION_STATE_PAST_APPLICATION',
+    [
+        CCGN_APPLICATION_STATE_LEGAL,
+        CCGN_APPLICATION_STATE_REJECTED,
+        CCGN_APPLICATION_STATE_ACCEPTED,
+        CCGN_APPLICATION_STATE_VOUCHING
+    ]
+);
+
 function ccgn_registration_user_get_stage ( $user_id ) {
-    return get_user_meta( $user_id, CCGN_APPLICATION_STATE )[0];
+    return get_user_meta( $user_id, CCGN_APPLICATION_STATE, true );
 }
 
 // Note that this isn't general-purpose: it will refuse to update if the user
@@ -105,7 +126,7 @@ function ccgn_registration_user_get_stage ( $user_id ) {
 function ccgn_registration_user_set_stage ( $user_id, $stage ) {
     $current = ccgn_registration_user_get_stage( $user_id );
     if ( ! in_array( $current, CCGN_APPLICATION_STATE_PAST_APPROVAL ) ) {
-        $result = update_user_meta(
+        update_user_meta(
             $user_id,
             CCGN_APPLICATION_STATE,
             $stage
@@ -155,7 +176,10 @@ function ccgn_applicants_with_state ( $state ) {
                     'value' => $state,
                     'compare' => '='
                 )
-            )
+            ),
+            // Ideally by application date but that isn't accessible here
+            'orderby' => 'ID',
+            'order' => 'ASC'
         )
     );
     return $users;

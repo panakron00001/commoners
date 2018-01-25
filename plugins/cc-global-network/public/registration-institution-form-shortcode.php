@@ -32,45 +32,29 @@ function ccgn_registration_institution_form_submit_handler ( $entry,
     ) ) {
         return;
     }
-    /*    switch( $form[ 'title' ] ) {
+    switch( $form[ 'title' ] ) {
     case CCGN_GF_AGREE_TO_TERMS:
-        ccgn_registration_current_user_set_stage (
-            CCGN_APPLICATION_STATE_DETAILS
-        );
-        break;
-    case CCGN_GF_APPLICANT_DETAILS:
         ccgn_registration_current_user_set_stage (
             CCGN_APPLICATION_STATE_VOUCHERS
         );
         break;
     case CCGN_GF_CHOOSE_VOUCHERS:
         ccgn_registration_current_user_set_stage (
+            CCGN_APPLICATION_STATE_DETAILS
+        );
+        break;
+    case CCGN_GF_INSTITUTION_DETAILS:
+        ccgn_registration_current_user_set_stage (
             CCGN_APPLICATION_STATE_RECEIVED
         );
         // Move if this is no longer the last form the applicant completes in
         // the initial data entry stage!
-        ccgn_registration_post_last_form ();
+        ccgn_registration_institution_post_last_form ();
         break;
-        }*/
+    }
 }
 
-function ccgn_registration_institution_shortcode_render ( $atts ) {
-    if ( ! is_user_logged_in() ) {
-        wp_redirect( 'https://login.creativecommons.org/login?service='
-                     . get_site_url()
-                     . '/sign-up/institution/' );
-        exit;
-    }
-    $user = wp_get_current_user();
-    if ( ccgn_user_is_individual_applicant ( $user->ID ) ) {
-        echo _( '<p>You are already applying for membership as an Individual.</p>' );
-        echo _( '<p>If this is an error, <a href="/contact/">contact us.</a></p>' );
-        return;
-    }
-    //FIXME: Model update code in the view
-    if ( ! ccgn_user_is_institutional_applicant ( $user->ID ) ) {
-        ccgn_user_set_institutional_applicant ( $user->ID );
-    }
+function ccgn_registration_institution_shortcode_render_view ( $user ) {
     $state = $user->get( CCGN_APPLICATION_STATE );
     switch ( $state ) {
     case '':
@@ -86,6 +70,7 @@ function ccgn_registration_institution_shortcode_render ( $atts ) {
         gravity_form( CCGN_GF_CHOOSE_VOUCHERS, false, false );
         break;
     case CCGN_APPLICATION_STATE_RECEIVED:
+    case CCGN_APPLICATION_STATE_VOUCHING:
         echo _( '<h2>Thank you for applying to join the Creative Commons Global Network</h2></p><p>Your application has been received.</p><p>It will take several days to be reviewed.</p><p>If you have any questions you can <a href="/contact/">contact us.</a></p>' );
         break;
     case CCGN_APPLICATION_STATE_REJECTED:
@@ -95,6 +80,29 @@ function ccgn_registration_institution_shortcode_render ( $atts ) {
         echo _( '<p>Your application has been accepted.</p>' );
         break;
     default:
+        error_log( 'Unrecognised application state: ' . $state );
         echo _( '<p>Unrecognised application state.</p>' );
     }
+}
+
+function ccgn_registration_institution_shortcode_render ( $atts ) {
+    if( ! is_user_logged_in() ) {
+        echo '<h3>OK! Let&apos;s get started</h3>';
+        echo '<p>First you need to log in with your CCID.</p>';
+        echo '<a class="cc-btn" href="'
+            . wp_login_url( get_permalink() )
+            . '">Log in</a>';
+        return;
+    }
+    $user = wp_get_current_user();
+    if ( ccgn_user_is_individual_applicant ( $user->ID ) ) {
+        echo _( '<p>You are already applying for membership as an Individual.</p>' );
+        echo _( '<p>If this is an error, <a href="/contact/">contact us.</a></p>' );
+        return;
+    }
+    //FIXME: Model update code in the view
+    if ( ! ccgn_user_is_institutional_applicant ( $user->ID ) ) {
+        ccgn_user_set_institutional_applicant ( $user->ID );
+    }
+    ccgn_registration_institution_shortcode_render_view( $user );
 }

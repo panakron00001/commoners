@@ -4,7 +4,7 @@
   Plugin URI: http://github.com/creativecommons/commoners
   Description: Buddypress extensions for network.creativecommons.org .
   Author: Creative Commons Corporation
-  Version: 2.3
+  Version: 2.5
   Author URI: http://github.com/creativecommons/
   License: GPLv2 or later at your option.
 */
@@ -51,10 +51,17 @@ require_once(
 require_once(CCGN_PATH . 'admin/user-application-page.php');
 require_once(CCGN_PATH . 'admin/user-pre-approve-list-page.php');
 require_once(CCGN_PATH . 'admin/user-final-approval-list-page.php');
+require_once(CCGN_PATH . 'admin/user-legal-approval-list-page.php');
 
 // Vouching UI for existing members to vouch for new applicant
 
 require_once(CCGN_PATH . 'public/vouching-form-shortcode.php');
+
+// Testing support
+
+if ( defined( 'CCGN_DEVELOPMENT' ) || defined( 'CCGN_TESTING' ) ) {
+    require_once(CCGN_PATH . 'testing/reset-state.php');
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // CAS / WordPress registration
@@ -104,29 +111,51 @@ register_activation_hook(
     'ccgn_create_profile_fields_institution'
 );
 
+// Don't lock the admin out
+
+register_activation_hook(
+    __FILE__,
+    'ccgn_ensure_admin_access_activation_callback'
+);
+add_action( 'admin_init', 'ccgn_ensure_admin_access_load_plugin_callback' );
+
 add_action(
     'bp_get_activity_action_pre_meta',
     '_bp_get_activity_action_pre_meta'
 );
 add_filter( 'bp_core_get_userid_from_nicename', '_bp_core_get_userid', 10, 2 );
-
-//FIXME: This hides them from the admin. So no.
-//add_filter( 'bp_xprofile_get_groups', 'ccgn_filter_role_groups' );
-
 add_action( 'bp_setup_nav', 'ccgn_not_logged_in_ui', 150 );
 
-// Don't let unvouched users set their profiles
+//add_filter( 'bp_xprofile_get_groups', 'ccgn_filter_role_groups', 999, 2 );
+add_filter( 'bp_after_has_profile_parse_args', '_bp_hide_profile_field_group' );
 
-add_action( 'bp_ready', '_bp_remove_profile_options_if_unvouched' );
 add_action( 'bp_core_setup_globals', '_bp_set_default_component' );
+
+add_action( 'bp_profile_header_meta', '_bp_meta_member_type', 10, 0 );
+
+// Remove unused modules
+
+add_filter( 'bp_is_active', '_bp_remove_components', 10, 2 );
+
+// Hide group/member directories etc. from users who are not logged in
+add_filter( 'get_header', '_bp_not_signed_in_redirect', 1 );
+
+// Don't show unvouched users in member directory, do list alphabetically
+add_action( 'bp_ajax_querystring', 'ccgn_bp_directory_query', 20, 2 );
 
 ////////////////////////////////////////////////////////////////////////////////
 // Registration Forms
 ////////////////////////////////////////////////////////////////////////////////
 
+// Make sure the applicant selects all the checkboxes
+
+add_action( 'gform_validation', 'ccgn_agree_to_terms_validate' );
+
 // Populate voucher selects
 
-add_action("gform_pre_render", "ccgn_set_vouchers_options");
+add_action( 'gform_pre_render', 'ccgn_set_vouchers_options' );
+
+add_filter( 'gform_validation', 'ccgn_choose_vouchers_validate' );
 
 // The shortcode to display the sign-up workflow forms.
 // The exact form (or other content) displayed depends on the user's
@@ -139,6 +168,13 @@ add_shortcode(
 
 add_filter( 'gform_validation', 'ccgn_vouching_form_post_validate' );
 
+add_action(
+    'gform_after_submission',
+    'ccgn_application_vouching_form_submit_handler',
+    10,
+    2
+);
+
 // After each form in the Member sign-up process is submitted,
 // we update the user's application stage/state
 
@@ -147,6 +183,11 @@ add_action(
     'ccgn_registration_individual_form_submit_handler',
     10,
     2
+);
+
+add_shortcode(
+    'ccgn-signup-institution-form',
+    'ccgn_registration_institution_shortcode_render'
 );
 
 add_action(
@@ -168,13 +209,6 @@ add_shortcode(
 );
 
 ////////////////////////////////////////////////////////////////////////////////
-// Admin pages and menus
-////////////////////////////////////////////////////////////////////////////////
-
-
-//add_action( 'parse_request', 'ccgn_vouching_url_handler' );
-
-////////////////////////////////////////////////////////////////////////////////
 // Add admin settings, menus etc.
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -192,13 +226,14 @@ if ( is_admin() ){
         'ccgn_remove_member_type_metabox'
     );
     add_action( 'admin_init', 'ccgn_profile_access_control' );
+    add_action( 'admin_menu', 'ccgn_application_final_approval_menu' );
     add_action( 'admin_menu', 'ccgn_application_users_menu' );
     add_action( 'admin_menu', 'ccgn_hide_application_users_menu', 999 );
-    add_action( 'admin_menu', 'ccgn_application_pre_approval_menu' );
-    add_action( 'admin_menu', 'ccgn_application_final_approval_menu' );
     add_action( 'admin_menu', 'ccgn_settings_emails_register' );
+    add_action( 'admin_menu', 'ccgn_application_pre_approval_menu' );
+    add_action( 'admin_menu', 'ccgn_application_legal_approval_menu' );
     add_filter( 'user_row_actions', 'ccgn_application_user_link', 10, 2 );
-    // Filter applicant user page form approve/declines to hook in user profile
+    // Filter applicant user page form approve/declines to hook user profile
     // creation and notification email sending.
     add_action(
         'gform_after_submission',
@@ -212,4 +247,20 @@ if ( is_admin() ){
         10,
         2
     );
+    add_action(
+        'gform_after_submission',
+         'ccgn_application_users_page_legal_approval_form_submit_handler',
+        10,
+        2
+    );
 }
+
+add_filter('bp_core_fetch_avatar_no_grav', '__return_true');
+
+////////////////////////////////////////////////////////////////////////////////
+// Cron
+////////////////////////////////////////////////////////////////////////////////
+
+register_activation_hook( __FILE__, 'ccgn_schedule_cleanup' );
+
+register_deactivation_hook( __FILE__, 'ccgn_schedule_remove_cleanup' );

@@ -13,6 +13,25 @@ function ccgn_settings_emails_section_callback () {
     <?php
 }
 
+function ccgn_settings_emails_sender_name () {
+    $options = get_option( 'ccgn-email-sender' );
+    ?>
+    <input type="text" name="ccgn-email-sender[name]"
+      class="large-text"
+      value="<?php echo $options['name']; ?>" />
+    <?php
+}
+
+function ccgn_settings_emails_sender_address () {
+    $options = get_option( 'ccgn-email-sender' );
+    ?>
+    <input type="email" name="ccgn-email-sender[address]"
+      class="large-text"
+      value="<?php echo $options['address']; ?>" />
+    <?php
+}
+
+
 function ccgn_settings_emails_received_subject () {
     $options = get_option( 'ccgn-email-received' );
     ?>
@@ -85,7 +104,7 @@ function ccgn_settings_emails_rejected_message () {
     <?php
 }
 
-function ccgn_settings_emails_register () {
+function ccgn_settings_emails_options_page () {
     add_options_page(
         'Global Network Emails',
         'Global Network Emails',
@@ -93,11 +112,44 @@ function ccgn_settings_emails_register () {
         'global-network-emails',
         'ccgn_settings_emails_render'
     );
+}
 
+function ccgn_settings_emails_options_sender () {
+    register_setting(
+        'ccgn-emails',
+        'ccgn-email-sender'
+    );
+
+    add_settings_section(
+        'ccgn-email-sender',
+        'Email Sender',
+        'ccgn_settings_emails_section_callback',
+        'global-network-emails'
+    );
+
+    add_settings_field(
+        'sender-name',
+        'Display Name',
+        'ccgn_settings_emails_sender_name',
+        'global-network-emails',
+        'ccgn-email-sender'
+    );
+
+    add_settings_field(
+        'sender-address',
+        'Email Address',
+        'ccgn_settings_emails_sender_address',
+        'global-network-emails',
+        'ccgn-email-sender'
+    );
+}
+
+function ccgn_settings_emails_options_received () {
     register_setting(
         'ccgn-emails',
         'ccgn-email-received'
     );
+
     add_settings_section(
         'ccgn-email-received',
         'Application Received',
@@ -108,23 +160,26 @@ function ccgn_settings_emails_register () {
     add_settings_field(
         'registration-subject',
         'Subject',
-        ccgn_settings_emails_received_subject,
+        'ccgn_settings_emails_received_subject',
         'global-network-emails',
         'ccgn-email-received'
     );
-
     add_settings_field(
         'registration-message',
         'Message',
-        ccgn_settings_emails_received_message,
+        'ccgn_settings_emails_received_message',
         'global-network-emails',
         'ccgn-email-received'
     );
 
+}
+
+function ccgn_settings_emails_options_vouching () {
     register_setting(
         'ccgn-emails',
         'ccgn-email-vouch-request'
     );
+
     add_settings_section(
         'ccgn-email-vouch-request',
         'Application Vouch Request',
@@ -135,7 +190,7 @@ function ccgn_settings_emails_register () {
     add_settings_field(
         'registration-subject',
         'Subject',
-        ccgn_settings_emails_vouch_request_subject,
+        'ccgn_settings_emails_vouch_request_subject',
         'global-network-emails',
         'ccgn-email-vouch-request'
     );
@@ -143,11 +198,13 @@ function ccgn_settings_emails_register () {
     add_settings_field(
         'registration-message',
         'Message',
-        ccgn_settings_emails_vouch_request_message,
+        'ccgn_settings_emails_vouch_request_message',
         'global-network-emails',
         'ccgn-email-vouch-request'
     );
+}
 
+function ccgn_settings_emails_options_approved () {
     register_setting(
         'ccgn-emails',
         'ccgn-email-approved'
@@ -163,7 +220,7 @@ function ccgn_settings_emails_register () {
     add_settings_field(
         'registration-subject',
         'Subject',
-        ccgn_settings_emails_approved_subject,
+        'ccgn_settings_emails_approved_subject',
         'global-network-emails',
         'ccgn-email-approved'
     );
@@ -171,12 +228,14 @@ function ccgn_settings_emails_register () {
     add_settings_field(
         'registration-message',
         'Message',
-        ccgn_settings_emails_approved_message,
+        'ccgn_settings_emails_approved_message',
         'global-network-emails',
         'ccgn-email-approved'
     );
+}
 
-        register_setting(
+function ccgn_settings_emails_options_rejected () {
+    register_setting(
         'ccgn-emails',
         'ccgn-email-rejected'
     );
@@ -191,7 +250,7 @@ function ccgn_settings_emails_register () {
     add_settings_field(
         'registration-subject',
         'Subject',
-        ccgn_settings_emails_rejected_subject,
+        'ccgn_settings_emails_rejected_subject',
         'global-network-emails',
         'ccgn-email-rejected'
     );
@@ -199,10 +258,19 @@ function ccgn_settings_emails_register () {
     add_settings_field(
         'registration-message',
         'Message',
-        ccgn_settings_emails_rejected_message,
+        'ccgn_settings_emails_rejected_message',
         'global-network-emails',
         'ccgn-email-rejected'
     );
+}
+
+function ccgn_settings_emails_register () {
+    ccgn_settings_emails_options_page();
+    ccgn_settings_emails_options_sender();
+    ccgn_settings_emails_options_received();
+    ccgn_settings_emails_options_vouching();
+    ccgn_settings_emails_options_approved();
+    ccgn_settings_emails_options_rejected();
 }
 
 function ccgn_settings_emails_print_info () {
@@ -222,6 +290,8 @@ function ccgn_settings_emails_render () {
       </form>
     </div>
     <p>The following substitutions can be made (where appropriate):
-       *|APPLICANT_NAME|* *|VOUCHER_NAME|* *|APPLICANT_ID|* .</p>
+       *|APPLICANT_NAME|* *|VOUCHER_NAME|* *|APPLICANT_ID|*
+       *|APPLICANT_PROFILE_URL|* *|SITE_URL|* .</p>
+    <p><i>Note that SITE_URL does not have a terminating slash!</i></p>
     <?php
 }

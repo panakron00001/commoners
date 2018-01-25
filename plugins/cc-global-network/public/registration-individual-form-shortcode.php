@@ -38,15 +38,15 @@ function ccgn_registration_individual_form_submit_handler ( $entry,
         break;
     case CCGN_GF_SIGN_CHARTER:
         ccgn_registration_current_user_set_stage (
-            CCGN_APPLICATION_STATE_DETAILS
-        );
-        break;
-    case CCGN_GF_INDIVIDUAL_DETAILS:
-        ccgn_registration_current_user_set_stage (
             CCGN_APPLICATION_STATE_VOUCHERS
         );
         break;
     case CCGN_GF_CHOOSE_VOUCHERS:
+        ccgn_registration_current_user_set_stage (
+            CCGN_APPLICATION_STATE_DETAILS
+        );
+        break;
+    case CCGN_GF_INDIVIDUAL_DETAILS:
         ccgn_registration_current_user_set_stage (
             CCGN_APPLICATION_STATE_RECEIVED
         );
@@ -57,12 +57,83 @@ function ccgn_registration_individual_form_submit_handler ( $entry,
     }
 }
 
+function ccgn_registration_individual_shortcode_render_view ( $user ) {
+    $state = $user->get( CCGN_APPLICATION_STATE );
+    switch ( $state ) {
+    case '':
+        gravity_form( CCGN_GF_AGREE_TO_TERMS, false, false );
+        break;
+    case CCGN_APPLICATION_STATE_CHARTER:
+        gravity_form( CCGN_GF_SIGN_CHARTER, false, false );
+        break;
+    case CCGN_APPLICATION_STATE_DETAILS:
+        ccgn_registration_individual_shortcode_render_details( $user );
+        break;
+    case CCGN_APPLICATION_STATE_VOUCHERS:
+        gravity_form( CCGN_GF_CHOOSE_VOUCHERS, false, false );
+        break;
+    case CCGN_APPLICATION_STATE_RECEIVED:
+    case CCGN_APPLICATION_STATE_VOUCHING:
+        echo _( '<h2>Thank you for applying to join the Creative Commons Global Network</h2></p><p>Your application has been received.</p><p>It will take several days to be reviewed.</p><p>If you have any questions you can <a href="/contact/">contact us.</a></p>' );
+        break;
+    case CCGN_APPLICATION_STATE_REJECTED:
+        echo _( '<p>Your application has been declined.</p><p>You may be able to re-apply after the public launch of the Gobal Network in April 2018.</p><p>If you have any questions you can <a href="/contact/">contact us</a>, but please note we cannot comment on the details of individual applications.</p>' );
+        break;
+    case CCGN_APPLICATION_STATE_ACCEPTED:
+        echo _( '<p>Your application has been accepted.</p>' );
+        break;
+    default:
+        error_log( 'Unrecognised application state: ' . $state );
+        echo _( '<p>Unrecognised application state.</p>' );
+    }
+}
+
+function ccgn_registration_individual_shortcode_render_gravatar ( $user ) {
+    ?>
+    <script>
+    <?php
+    if ( ccgn_user_gravatar_exists ( $user->ID ) ) {
+    ?>
+      jQuery('.ccgn_applicant_details_gravatar')
+          .html('<?php echo ccgn_user_gravatar_img( $user->ID, 80 ); ?><div class="gfield_description">Your current Gravatar.</div>');
+    <?php
+    } else {
+    ?>
+      jQuery('.ccgn_avatar_source input[value="gravatar"]').attr("disabled",
+                                                                 true);
+      jQuery('.ccgn_avatar_source input[value="gravatar"]').hide();
+      jQuery('.ccgn_avatar_source input[value="gravatar"] + label').hide();
+      jQuery('.ccgn_avatar_source input[value="image"]').prop("checked",
+                                                              true);
+    <?php
+
+    }
+    ?>
+    </script>
+    <?php
+}
+
+function ccgn_registration_individual_shortcode_render_details ( $user ) {
+    gravity_form(
+        CCGN_GF_INDIVIDUAL_DETAILS,
+        false,
+        false,
+        array(
+            CCGN_GF_PRE_APPROVAL_APPLICANT_ID_PARAMETER
+            => $applicant_id
+        )
+    );
+    //ccgn_registration_individual_shortcode_render_gravatar( $user );
+}
+
 function ccgn_registration_individual_shortcode_render ( $atts ) {
-    if ( ! is_user_logged_in() ) {
-        wp_redirect( 'https://login.creativecommons.org/login?service='
-                     . get_site_url()
-                     . '/sign-up/individual/' );
-        exit;
+    if( ! is_user_logged_in() ) {
+        echo '<h3>OK! Let&apos;s get started</h3>';
+        echo '<p>First you need to log in with your CCID.</p>';
+        echo '<a class="cc-btn" href="'
+            . wp_login_url( get_permalink() )
+            . '">Log in</a>';
+        return;
     }
     $user = wp_get_current_user();
     if ( ccgn_user_is_institutional_applicant ( $user->ID ) ) {
@@ -73,32 +144,6 @@ function ccgn_registration_individual_shortcode_render ( $atts ) {
     //FIXME: Model update code in the view
     if ( ! ccgn_user_is_individual_applicant ( $user->ID ) ) {
         ccgn_user_set_individual_applicant ( $user->ID );
-
     }
-    $state = $user->get( CCGN_APPLICATION_STATE );
-    switch ( $state ) {
-    case '':
-        gravity_form( CCGN_GF_AGREE_TO_TERMS, false, false );
-        break;
-    case CCGN_APPLICATION_STATE_CHARTER:
-        gravity_form( CCGN_GF_SIGN_CHARTER, false, false );
-        break;
-    case CCGN_APPLICATION_STATE_DETAILS:
-        gravity_form( CCGN_GF_INDIVIDUAL_DETAILS, false, false );
-        break;
-    case CCGN_APPLICATION_STATE_VOUCHERS:
-        gravity_form( CCGN_GF_CHOOSE_VOUCHERS, false, false );
-        break;
-    case CCGN_APPLICATION_STATE_RECEIVED:
-        echo _( '<h2>Thank you for applying to join the Creative Commons Global Network</h2></p><p>Your application has been received.</p><p>It will take several days to be reviewed.</p><p>If you have any questions you can <a href="/contact/">contact us.</a></p>' );
-        break;
-    case CCGN_APPLICATION_STATE_REJECTED:
-        echo _( '<p>Your application has been declined.</p><p>You may be able to re-apply after the public launch of the Gobal Network in April 2018.</p><p>If you have any questions you can <a href="/contact/">contact us</a>, but please note we cannot comment on the details of individual applications.</p>' );
-        break;
-    case CCGN_APPLICATION_STATE_ACCEPTED:
-        echo _( '<p>Your application has been accepted.</p>' );
-        break;
-    default:
-        echo _( '<p>Unrecognised application state.</p>' );
-    }
+    ccgn_registration_individual_shortcode_render_view( $user );
 }

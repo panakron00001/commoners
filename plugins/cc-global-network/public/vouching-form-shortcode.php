@@ -18,15 +18,62 @@ defined( 'ABSPATH' ) or die( 'No script kiddies please!' );
 // username until we cache the ids on save.
 
 function ccgn_vouching_request_exists ( $applicant_id,
-                                             $voucher_id ) {
+                                        $voucher_id ) {
     $result = false;
-    $vouchers = ccgn_vouching_request_entry ( $applicant_id );
+    $vouchers = ccgn_application_vouchers ( $applicant_id );
     foreach( CCGN_GF_VOUCH_VOUCHER_FIELDS as $field_id ) {
         if ( $vouchers[ $field_id ] == $voucher_id ) {
             $result = true;
         }
     }
     return $result;
+}
+
+// Find vouching requests for the current user to respond to
+
+function ccgn_vouching_requests_for_me ( $voucher_id ) {
+    $results = array();
+    foreach( CCGN_GF_VOUCH_VOUCHER_FIELDS as $field_id ) {
+        $requests = ccgn_entries_referring_to_user (
+            $voucher_id,
+            CCGN_GF_CHOOSE_VOUCHERS,
+            $field_id
+        );
+        foreach( $requests as $request ) {
+            $applicant_id = $request[ 'created_by' ];
+            if ( ccgn_vouching_request_active ( $applicant_id )
+                 && ccgn_vouching_request_open(
+                     $applicant_id,
+                     $voucher_id
+                 ) ) {
+                $results[] = $request;
+            }
+        }
+    }
+    return $results;
+}
+
+function ccgn_vouching_requests_render ( $voucher_id ) {
+    $requests = ccgn_vouching_requests_for_me ( $voucher_id );
+    if ( $requests !== [] ) {
+        echo _( "<h2>Current Vouching Requests</h2><ul>" );
+        foreach ( $requests as $request ) {
+            $applicant_id = $request[ 'created_by' ];
+            $applicant = get_user_by( 'ID', $applicant_id );
+            echo '<li><a href="'
+                . get_site_url()
+                . '/vouch/?applicant_id='
+                . $applicant_id
+                . '">'
+                . $applicant->display_name
+                . ' ('
+                . $applicant->user_nicename
+                . ')</a></li>';
+        }
+        echo "</ul>";
+    } else {
+        echo _( "<h2>No Requests</h2><p>There are currently no Vouching requests waiting for you.</p>" );
+    }
 }
 
 // Render the form for User to vouch for Applicant.
@@ -36,43 +83,53 @@ function ccgn_vouching_request_exists ( $applicant_id,
 // out there (we will validate the userid server-side on submission).
 
 function ccgn_vouching_shortcode_render ( $atts ) {
-    // Only logged-in users can vouch.
-    if ( ! is_user_logged_in() ) {
-        wp_redirect( 'https://login.creativecommons.org/login?service='
-                     . get_site_url()
-                     . '/vouch/' );
-        exit;
-    }
-
-    // We need an applicant to vouch for
-    if ( ! isset( $_GET[ 'applicant_id' ] ) ) {
-        echo _( '<p>No applicant specified to vouch for.</p>' );
-        exit;
+    if( ! is_user_logged_in() ) {
+        echo '<h3>You must be logged in to Vouch</h3>';
+        echo '<p>You can log in with your CCID here:</p>';
+        echo '<a class="cc-btn" href="'
+            . 'https://login.creativecommons.org/login?service='
+            . get_permalink()
+            . '">Log in</a>';
+        return;
     }
 
     // Get applicant and voucher identifiers
     //FIXME: Get voucher id and use that once the form contains it
-    $applicant_id = $_GET[ 'applicant_id' ];
-    $voucher = wp_get_current_user();
+    // We need an applicant to vouch for
+    $applicant_id = filter_input(
+        INPUT_GET,
+        'applicant_id',
+        FILTER_VALIDATE_INT
+    );
+    if ( $applicant_id === false ) {
+        echo _( '<br />Invalid user id.' );
+        return;
+    }
+
     $voucher_id = get_current_user_id();
 
-    // Render correct UI for state of vouching
-    if ( ! ccgn_user_is_vouched( $voucher_id ) ) {
-        echo _( "<p>You must be vouched before you can vouch for others.<p>" );
+    // REMOVE IF/WHEN DEFAULT PAGE TEMPLATE SHOWS TITLE.
+    echo "<br/><h1>Vouching</h1>";
+
+    // If no applicant_id, show the list of vouch requests.
+    if ( $applicant_id === null ) {
+        ccgn_vouching_requests_render ( $voucher_id );
+    } elseif ( ! ccgn_user_is_vouched( $voucher_id ) ) {
+        echo _( "<p>You must be vouched before you can vouch for others.</p>" );
     } elseif ( ! ccgn_vouching_request_exists( $applicant_id,
                                               $voucher_id ) ) {
-        echo _( "<p>Request couldn't be found.<p>" );
+        echo _( "<p>Request couldn't be found.</p>" );
     } elseif ( ! ccgn_vouching_request_active ( $applicant_id ) ) {
-        echo _( "<p>That person's application to become a Member of the Creative Commons Global Network has already been resolved.<p></p>Thank you!</p>" );
+        echo _( "<h2>Thank you!</h2><p>That person's application to become a Member of the Creative Commons Global Network has already been resolved.<p>" );
     } elseif( ! ccgn_vouching_request_open( $applicant_id,
                                                  $voucher_id ) ) {
         // This is a bit of a hack. It will be displayed when the page
         // refreshes after intially submitting the form AND if the user
         // re-visits it subsequently.
         // So we make sure it will read well in both cases.
-        echo _( "<p>Thank you for responding to this request!<p>" );
+        echo _( "<h2>Thank you!</h2><p>Thank you for responding to this request!<p>" );
     } else {
-        if ( ccgn_user_is_institutional_applicant ( $user_id ) ) {
+        if ( ccgn_user_is_institutional_applicant ( $applicant_id ) ) {
             echo _( "<i>Note that this is an institution applying to join the Global Network. We still need you to vouch for this institution as you would for an individual that you know.</i>" );
         }
         // We were going to pass this as the content of an HTML field in the
@@ -118,4 +175,17 @@ function ccgn_vouching_form_post_validate ( $validation_result ) {
         $validation_result['form'] = $form;
     }
     return $validation_result;
+}
+
+function ccgn_application_vouching_form_submit_handler ( $entry,
+                                                         $form ) {
+    if ( $form[ 'title' ] == CCGN_GF_VOUCH ) {
+        $applicant_id = $entry[ CCGN_GF_VOUCH_APPLICANT_ID ];
+        $stage = ccgn_registration_user_get_stage( $applicant_id);
+        if ( $stage != CCGN_APPLICATION_STATE_VOUCHING ) {
+            echo 'User not vouching.';
+            return;
+        }
+        ccgn_evaluate_and_maybe_finalize_application ( $applicant_id );
+    }
 }

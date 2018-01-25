@@ -11,8 +11,6 @@ function ccgn_list_applications_for_pre_approval () {
         $user = get_user_by('ID', $user_id);
         // The last form the user filled out, so the time to use
         $vouchers_entry = ccgn_application_vouchers($user_id);
-        // The user entered a name here
-        $details_entry = ccgn_application_details($user_id);
         echo '<tr><td><a href="'
             . ccgn_application_user_application_page_url( $user_id )
             . '">'
@@ -25,9 +23,9 @@ function ccgn_list_applications_for_pre_approval () {
     }
 }
 
-function ccgn_application_pre_approval_page () {
+function ccgn_application_spam_check_page () {
     ?>
-<h1>Applicants for Pre Approval</h1>
+<h1>Global Network Application Spam Check</h1>
 <table class="ccgn-approval-table">
   <thead>
     <tr>
@@ -41,9 +39,9 @@ function ccgn_application_pre_approval_page () {
   </tbody>
 </table>
 <p>This is the list of new applicants. They have not yet been sent to the
-Vouching stage.</p>
-<p>If you are part of the application review team, please review
-their profile pages by clicking on the link to their username.</p>
+Vouching/Approval stage.</p>
+<p>Please review their profile pages to ensure that the application is not spam before approving the application to move on to the Vouching/Approval stage by clicking on the link to the applicant&apos;s username.</p>
+<p>You can review the guidelines for reviewing applications here: <a href="https://github.com/creativecommons/global-network-strategy/blob/master/docs/Guide_for_approve_new_members.md">https://github.com/creativecommons/global-network-strategy/blob/master/docs/Guide_for_approve_new_members.md</a>.</p>
 <!-- move to stylesheet and queue -->
 <style>
 .ccgn-approval-table {
@@ -63,11 +61,12 @@ their profile pages by clicking on the link to their username.</p>
 }
 
 function ccgn_application_pre_approval_menu () {
-    add_users_page(
-        'Global Network Pre-Approval',
-        'Global Network Pre-Approval',
-        'edit_users',
-        'global-network-pre-approval',
-        'ccgn_application_pre_approval_page'
+    add_submenu_page(
+        'global-network-application-approval',
+        'Spam Check',
+        'Spam Check',
+        'ccgn_pre_approve',
+        'global-network-application-spam-check',
+        'ccgn_application_spam_check_page'
     );
 }
